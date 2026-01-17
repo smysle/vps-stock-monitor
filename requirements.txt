@@ -1,40 +1,29 @@
-# VPS 补货监控系统依赖
+# Core
+playwright==1.40.0
+aiohttp==3.9.1
 
-# 核心依赖
-playwright>=1.40.0
-aiohttp>=3.9.0
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.25.0
+python-multipart==0.0.6
 
-# Web 框架
-fastapi>=0.109.0
-uvicorn[standard]>=0.25.0
-python-multipart>=0.0.6
+# Configuration
+pyyaml==6.0.1
+watchdog==3.0.0
 
 # Redis
-redis>=5.0.0
+redis==5.0.1
 
-# 配置管理
-pyyaml>=6.0.0
-watchdog>=3.0.0
+# Validation
+pydantic==2.5.3
+pydantic-settings==2.1.0
 
-# 日志
-loguru>=0.7.0
+# Utilities
+python-dotenv==1.0.0
+tenacity==8.2.3
 
-# 数据处理
-pydantic>=2.0.0
-
-# 异步调度
-apscheduler>=3.10.0
-
-# HTTP 客户端
-httpx>=0.25.0
-
-# HTML 解析
-beautifulsoup4>=4.12.0
-lxml>=4.9.0
-
-# 开发依赖
-pytest>=7.4.0
-pytest-asyncio>=0.21.0
-black>=23.0.0
-isort>=5.12.0
-mypy>=1.5.0
+# Development (optional)
+# pytest==7.4.3
+# black==23.12.1
+# mypy==1.8.0
+# ruff==0.1.9

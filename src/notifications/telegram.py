@@ -3,6 +3,8 @@ Telegram 通知
 """
 import asyncio
 import logging
+import re
+import warnings
 import aiohttp
 from aiohttp import ClientError, ClientTimeout
 from typing import Optional
@@ -16,7 +18,11 @@ logger = logging.getLogger(__name__)
 class TelegramNotifier(NotificationProvider):
     """Telegram 通知器"""
     
-    BASE_URL = "https://api.telegram.org/bot{token}"
+    # API URL 模板 - 不存储含 token 的 URL
+    BASE_URL = "https://api.telegram.org/bot{token}/{method}"
+    
+    # chat_id 验证正则: 数字ID（可带负号）或 @username
+    CHAT_ID_PATTERN = re.compile(r'^-?\d+$|^@[\w]{5,}$')
     
     # 重试配置
     MAX_RETRIES = 3
@@ -38,17 +44,45 @@ class TelegramNotifier(NotificationProvider):
             chat_id: 聊天 ID (可以是用户 ID 或群组 ID)
             parse_mode: 解析模式 (HTML/Markdown/MarkdownV2)
             disable_preview: 是否禁用链接预览
+        
+        Raises:
+            ValueError: 如果 chat_id 格式无效
         """
-        self._bot_token = bot_token  # 使用私有属性
+        # 验证 chat_id 格式
+        if not self.CHAT_ID_PATTERN.match(chat_id):
+            raise ValueError(f"Invalid chat_id format: {chat_id}")
+        
+        # 私有存储 token，不存储包含 token 的 URL
+        self._bot_token = bot_token
         self.chat_id = chat_id
         self.parse_mode = parse_mode
         self.disable_preview = disable_preview
-        self.base_url = self.BASE_URL.format(token=bot_token)
         self._session: Optional[aiohttp.ClientSession] = None
+    
+    def _get_api_url(self, method: str) -> str:
+        """动态生成 API URL，避免存储含 token 的 URL"""
+        return self.BASE_URL.format(token=self._bot_token, method=method)
     
     def __repr__(self) -> str:
         """安全的字符串表示（不暴露 token）"""
-        return f"TelegramNotifier(chat_id={self.chat_id})"
+        return f"TelegramNotifier(chat_id='{self.chat_id}', bot_token='***')"
+    
+    async def __aenter__(self):
+        """异步上下文管理器入口"""
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """异步上下文管理器退出"""
+        await self.close()
+    
+    def __del__(self):
+        """析构函数 - 检测资源泄露"""
+        if hasattr(self, '_session') and self._session and not self._session.closed:
+            warnings.warn(
+                f"{self.__class__.__name__} was not properly closed. "
+                "Use 'async with' or call 'await close()' explicitly.",
+                ResourceWarning
+            )
     
     @property
     def name(self) -> str:
@@ -121,7 +155,7 @@ class TelegramNotifier(NotificationProvider):
             text = message.to_text()
         
         # 发送消息
-        url = f"{self.base_url}/sendMessage"
+        url = self._get_api_url("sendMessage")
         payload = {
             "chat_id": self.chat_id,
             "text": text,
@@ -147,7 +181,7 @@ class TelegramNotifier(NotificationProvider):
         if not photo:
             return await self.send(message)
         
-        url = f"{self.base_url}/sendPhoto"
+        url = self._get_api_url("sendPhoto")
         
         if self.parse_mode == "HTML":
             caption = message.to_html()
@@ -166,7 +200,7 @@ class TelegramNotifier(NotificationProvider):
     
     async def test(self) -> bool:
         """测试 Telegram 连接"""
-        url = f"{self.base_url}/getMe"
+        url = self._get_api_url("getMe")
         data = await self._request_with_retry("GET", url)
         
         if data and data.get("ok"):

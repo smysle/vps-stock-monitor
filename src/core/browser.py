@@ -101,41 +101,73 @@ class BrowserManager:
             
             logger.info("初始化浏览器...")
             
-            self._playwright = await async_playwright().start()
-            
-            # 浏览器启动参数
-            launch_args = [
-                "--disable-blink-features=AutomationControlled",
-                "--disable-dev-shm-usage",
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-infobars",
-                "--disable-extensions",
-                "--disable-gpu",
-                "--disable-web-security",
-                "--disable-features=IsolateOrigins,site-per-process",
-            ]
-            launch_args.extend(self.config.extra_args)
-            
-            # 代理配置
-            proxy_config = None
-            if self.config.proxy:
-                proxy_config = {"server": self.config.proxy}
-                logger.info(f"使用代理: {self.config.proxy}")
-            
-            # 启动浏览器
-            self._browser = await self._playwright.chromium.launch(
-                headless=self.config.headless,
-                slow_mo=self.config.slow_mo,
-                args=launch_args,
-                proxy=proxy_config
-            )
-            
-            # 创建浏览器上下文
-            self._context = await self._create_context()
-            
-            self._initialized = True
-            logger.info("浏览器初始化完成")
+            try:
+                self._playwright = await async_playwright().start()
+                
+                # 浏览器启动参数
+                launch_args = [
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-dev-shm-usage",
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-infobars",
+                    "--disable-extensions",
+                    "--disable-gpu",
+                    "--disable-web-security",
+                    "--disable-features=IsolateOrigins,site-per-process",
+                ]
+                launch_args.extend(self.config.extra_args)
+                
+                # 代理配置
+                proxy_config = None
+                if self.config.proxy:
+                    proxy_config = {"server": self.config.proxy}
+                    logger.info(f"使用代理: {self.config.proxy}")
+                
+                # 启动浏览器
+                self._browser = await self._playwright.chromium.launch(
+                    headless=self.config.headless,
+                    slow_mo=self.config.slow_mo,
+                    args=launch_args,
+                    proxy=proxy_config
+                )
+                
+                # 创建浏览器上下文
+                self._context = await self._create_context()
+                
+                self._initialized = True
+                logger.info("浏览器初始化完成")
+            except PlaywrightError as e:
+                logger.error(f"浏览器错误: {e}")
+                await self._cleanup_on_error()
+                raise
+            except Exception as e:
+                logger.exception(f"未预期的错误: {e}")
+                await self._cleanup_on_error()
+                raise
+    
+    async def _cleanup_on_error(self):
+        """初始化失败时的清理"""
+        if self._context:
+            try:
+                await self._context.close()
+            except Exception:
+                pass
+            self._context = None
+        
+        if self._browser:
+            try:
+                await self._browser.close()
+            except Exception:
+                pass
+            self._browser = None
+        
+        if self._playwright:
+            try:
+                await self._playwright.stop()
+            except Exception:
+                pass
+            self._playwright = None
     
     async def _create_context(self) -> BrowserContext:
         """创建浏览器上下文"""
@@ -327,6 +359,14 @@ class BrowserManager:
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
+    
+    def __repr__(self) -> str:
+        """返回对象的字符串表示，保护敏感信息"""
+        return (
+            f"BrowserManager(headless={self.config.headless}, "
+            f"initialized={self._initialized}, "
+            f"has_proxy={'***' if self.config.proxy else None})"
+        )
 
 
 class PageHelper:

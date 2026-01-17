@@ -4,10 +4,13 @@
 import json
 import logging
 import hashlib
+import re
+import ipaddress
 from datetime import datetime
 from typing import List, Optional
+from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Path
 import redis.asyncio as redis
 from redis.exceptions import RedisError
 
@@ -20,6 +23,69 @@ from ...config.settings import ConfigManager
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# SSRF 防护配置
+ALLOWED_SCHEMES = {'http', 'https'}
+BLOCKED_HOSTS = {'localhost', '127.0.0.1', '0.0.0.0', '169.254.169.254'}
+BLOCKED_NETWORKS = [
+    ipaddress.ip_network('10.0.0.0/8'),
+    ipaddress.ip_network('172.16.0.0/12'),
+    ipaddress.ip_network('192.168.0.0/16'),
+    ipaddress.ip_network('169.254.0.0/16'),
+]
+
+# product_id 格式验证
+PRODUCT_ID_PATTERN = re.compile(r'^[a-f0-9]{16}$')
+
+
+def safe_float(value, default=None):
+    """安全转换为浮点数"""
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def safe_int(value, default: int = 0) -> int:
+    """安全转换为整数"""
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def validate_product_url(url: str) -> None:
+    """验证产品 URL，防止 SSRF"""
+    parsed = urlparse(url)
+    if parsed.scheme not in ALLOWED_SCHEMES:
+        raise HTTPException(400, f"URL scheme not allowed: {parsed.scheme}")
+    
+    hostname = parsed.hostname
+    if not hostname:
+        raise HTTPException(400, "Invalid URL: no hostname")
+    
+    if hostname in BLOCKED_HOSTS:
+        raise HTTPException(400, "Internal URLs not allowed")
+    
+    # 检查是否为 IP 地址
+    try:
+        ip = ipaddress.ip_address(hostname)
+        for network in BLOCKED_NETWORKS:
+            if ip in network:
+                raise HTTPException(400, "Internal IP addresses not allowed")
+    except ValueError:
+        pass  # 不是 IP 地址，是域名
+
+
+def validate_product_id(product_id: str) -> str:
+    """验证 product_id 格式"""
+    if not PRODUCT_ID_PATTERN.match(product_id):
+        raise HTTPException(400, "Invalid product ID format")
+    return product_id
 
 # Redis Keys
 PRODUCTS_KEY = "vps_monitor:products"
@@ -166,10 +232,13 @@ async def list_products(
 
 @router.get("/{product_id}", response_model=ProductResponse)
 async def get_product(
-    product_id: str,
+    product_id: str = Path(..., regex="^[a-f0-9]{16}$"),
     redis_client: redis.Redis = Depends(get_redis)
 ):
     """获取单个产品"""
+    # 验证 product_id 格式
+    validate_product_id(product_id)
+    
     product = await get_product_from_redis(redis_client, product_id)
     
     if not product:
@@ -197,6 +266,9 @@ async def create_product(
     redis_client: redis.Redis = Depends(get_redis)
 ):
     """创建产品"""
+    # SSRF 防护：验证 URL
+    validate_product_url(product.url)
+    
     product_id = generate_product_id(product.url)
     
     # 检查是否已存在
@@ -219,11 +291,18 @@ async def create_product(
 
 @router.put("/{product_id}", response_model=ProductResponse)
 async def update_product(
-    product_id: str,
-    update: ProductUpdate,
+    product_id: str = Path(..., regex="^[a-f0-9]{16}$"),
+    update: ProductUpdate = None,
     redis_client: redis.Redis = Depends(get_redis)
 ):
     """更新产品"""
+    # 验证 product_id 格式
+    validate_product_id(product_id)
+    
+    # 如果更新包含 URL，验证 URL
+    if update and hasattr(update, 'url') and update.url:
+        validate_product_url(update.url)
+    
     product = await get_product_from_redis(redis_client, product_id)
     
     if not product:
@@ -243,10 +322,13 @@ async def update_product(
 
 @router.delete("/{product_id}", response_model=SuccessResponse)
 async def delete_product(
-    product_id: str,
+    product_id: str = Path(..., regex="^[a-f0-9]{16}$"),
     redis_client: redis.Redis = Depends(get_redis)
 ):
     """删除产品"""
+    # 验证 product_id 格式
+    validate_product_id(product_id)
+    
     product = await get_product_from_redis(redis_client, product_id)
     
     if not product:
@@ -261,10 +343,13 @@ async def delete_product(
 
 @router.post("/{product_id}/toggle", response_model=ProductResponse)
 async def toggle_product(
-    product_id: str,
+    product_id: str = Path(..., regex="^[a-f0-9]{16}$"),
     redis_client: redis.Redis = Depends(get_redis)
 ):
     """切换产品启用状态"""
+    # 验证 product_id 格式
+    validate_product_id(product_id)
+    
     product = await get_product_from_redis(redis_client, product_id)
     
     if not product:

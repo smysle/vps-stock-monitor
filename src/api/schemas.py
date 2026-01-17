@@ -4,7 +4,7 @@ API 数据模型 (Pydantic Schemas)
 from datetime import datetime
 from typing import Optional, List
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 # 导入版本常量
 try:
@@ -26,12 +26,19 @@ class ProductStatus(str, Enum):
 
 class ProductBase(BaseModel):
     """产品基础模型"""
-    name: str = Field(..., description="产品名称")
-    url: str = Field(..., description="产品链接")
-    site: str = Field(..., description="站点标识")
+    name: str = Field(..., min_length=1, max_length=200, description="产品名称")
+    url: str = Field(..., max_length=2048, description="产品链接")
+    site: str = Field(..., min_length=1, max_length=50, description="站点标识")
     enabled: bool = Field(True, description="是否启用")
-    description: str = Field("", description="产品描述")
+    description: str = Field("", max_length=1000, description="产品描述")
     check_interval: Optional[int] = Field(None, description="自定义检查间隔(秒)")
+    
+    @validator('url')
+    def validate_url(cls, v):
+        """验证 URL 格式"""
+        if not v.startswith(('http://', 'https://')):
+            raise ValueError('URL 必须以 http:// 或 https:// 开头')
+        return v
 
 
 class ProductCreate(ProductBase):

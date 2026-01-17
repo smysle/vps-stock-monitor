@@ -24,6 +24,27 @@ CHECK_HISTORY_KEY = "vps_monitor:check_history"
 STATS_KEY = "vps_monitor:stats"
 
 
+def safe_parse_datetime(value: str) -> Optional[datetime]:
+    """安全解析日期时间"""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except (ValueError, TypeError) as e:
+        logger.warning(f"无效的时间格式: {value}, 错误: {e}")
+        return None
+
+
+def safe_int(value, default: int = 0) -> int:
+    """安全转换为整数"""
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
 @router.get("", response_model=SystemStatus)
 async def get_system_status(
     redis_client: redis.Redis = Depends(get_redis),
@@ -50,17 +71,18 @@ async def get_system_status(
         if status_data:
             running = status_data.get('running', 'false').lower() == 'true'
             if status_data.get('start_time'):
-                start_time = datetime.fromisoformat(status_data['start_time'])
-                uptime_seconds = int((datetime.now() - start_time).total_seconds())
+                start_time = safe_parse_datetime(status_data['start_time'])
+                if start_time:
+                    uptime_seconds = int((datetime.now() - start_time).total_seconds())
             if status_data.get('last_check_time'):
-                last_check_time = datetime.fromisoformat(status_data['last_check_time'])
+                last_check_time = safe_parse_datetime(status_data['last_check_time'])
         
         # 统计数据
         stats_data = await redis_client.hgetall(STATS_KEY)
         if stats_data:
-            total_checks = int(stats_data.get('total_checks', 0))
-            successful_checks = int(stats_data.get('successful_checks', 0))
-            failed_checks = int(stats_data.get('failed_checks', 0))
+            total_checks = safe_int(stats_data.get('total_checks'))
+            successful_checks = safe_int(stats_data.get('successful_checks'))
+            failed_checks = safe_int(stats_data.get('failed_checks'))
     
     return SystemStatus(
         version="1.0.0",
@@ -134,12 +156,12 @@ async def get_stats(
         # 基础统计
         stats_data = await redis_client.hgetall(STATS_KEY)
         if stats_data:
-            stats['total_checks'] = int(stats_data.get('total_checks', 0))
-            stats['successful_checks'] = int(stats_data.get('successful_checks', 0))
-            stats['failed_checks'] = int(stats_data.get('failed_checks', 0))
-            stats['in_stock_notifications'] = int(stats_data.get('in_stock_notifications', 0))
+            stats['total_checks'] = safe_int(stats_data.get('total_checks'))
+            stats['successful_checks'] = safe_int(stats_data.get('successful_checks'))
+            stats['failed_checks'] = safe_int(stats_data.get('failed_checks'))
+            stats['in_stock_notifications'] = safe_int(stats_data.get('in_stock_notifications'))
             
-            total_duration = int(stats_data.get('total_duration_ms', 0))
+            total_duration = safe_int(stats_data.get('total_duration_ms'))
             if stats['total_checks'] > 0:
                 stats['average_check_duration_ms'] = total_duration // stats['total_checks']
         

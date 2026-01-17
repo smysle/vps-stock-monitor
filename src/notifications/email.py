@@ -4,6 +4,7 @@
 import html as html_module
 import asyncio
 import logging
+import re
 import smtplib
 import ssl
 from email.mime.text import MIMEText
@@ -47,6 +48,22 @@ class EmailNotifier(NotificationProvider):
     SMTP_TIMEOUT = 30
     MAX_RETRIES = 2
     
+    # 邮件地址验证正则
+    EMAIL_PATTERN = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    
+    @classmethod
+    def _validate_email(cls, email: str) -> bool:
+        """验证邮件地址格式"""
+        return bool(cls.EMAIL_PATTERN.match(email))
+    
+    @staticmethod
+    def _sanitize_header(text: str) -> str:
+        """清理邮件头，防止注入"""
+        if not text:
+            return ""
+        # 移除换行符，限制长度（RFC 5322）
+        return text.replace('\r', '').replace('\n', ' ').strip()[:998]
+    
     def __init__(
         self,
         smtp_host: str,
@@ -70,13 +87,25 @@ class EmailNotifier(NotificationProvider):
             to_emails: 收件人邮箱列表
             use_tls: 是否使用 STARTTLS
             use_ssl: 是否使用 SSL
+        
+        Raises:
+            ValueError: 如果邮件地址格式无效
         """
+        # 验证发件人邮箱
+        if not self._validate_email(from_email):
+            raise ValueError(f"Invalid from_email: {from_email}")
+        
+        # 验证并过滤收件人邮箱
+        valid_emails = [e for e in to_emails if self._validate_email(e)]
+        if not valid_emails:
+            raise ValueError("No valid recipient emails provided")
+        
         self.smtp_host = smtp_host
         self.smtp_port = smtp_port
         self.username = username
         self._password = password  # 私有属性
         self.from_email = from_email
-        self.to_emails = to_emails
+        self.to_emails = valid_emails
         self.use_tls = use_tls
         self.use_ssl = use_ssl
     
@@ -217,7 +246,9 @@ class EmailNotifier(NotificationProvider):
         try:
             # 创建邮件
             msg = MIMEMultipart("alternative")
-            msg["Subject"] = f"{self.LEVEL_EMOJI.get(message.level, '')} {message.title}"
+            # 清理邮件头，防止注入
+            safe_title = self._sanitize_header(message.title)
+            msg["Subject"] = f"{self.LEVEL_EMOJI.get(message.level, '')} {safe_title}"
             msg["From"] = self.from_email
             msg["To"] = ", ".join(self.to_emails)
             

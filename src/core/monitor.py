@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Callable, Any, Union
 from dataclasses import dataclass, field
 
-from playwright.async_api import Page
+from playwright.async_api import Page, Error as PlaywrightError
 
 from ..config.settings import ConfigManager, get_config
 from ..config.products import Product, ProductStatus, StockStatus
@@ -133,8 +133,16 @@ class VPSMonitor:
                 
                 return status
                 
+        except PlaywrightError as e:
+            logger.error(f"浏览器错误 [{product.name}]: {e}")
+            return StockStatus(
+                product=product,
+                status=ProductStatus.ERROR,
+                error_message=f"浏览器错误: {str(e)}",
+                checked_at=datetime.now().isoformat()
+            )
         except Exception as e:
-            logger.error(f"检查产品失败 [{product.name}]: {e}")
+            logger.exception(f"未预期的错误 [{product.name}]: {e}")
             return StockStatus(
                 product=product,
                 status=ProductStatus.ERROR,

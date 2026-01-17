@@ -77,10 +77,21 @@ class CapMonsterClient:
         timeout: int = 120,
         poll_interval: int = 3
     ):
+        if not api_key or not isinstance(api_key, str):
+            raise ValueError("API Key 不能为空")
+        
+        api_key = api_key.strip()
+        if len(api_key) < 20:
+            logger.warning("API Key 长度异常，请检查配置")
+        
         self.api_key = api_key
         self.timeout = timeout
         self.poll_interval = poll_interval
         self._session: Optional[aiohttp.ClientSession] = None
+    
+    def __repr__(self) -> str:
+        key_hint = f"{self.api_key[:4]}***" if self.api_key else ""
+        return f"CapMonsterClient(api_key='{key_hint}', timeout={self.timeout})"
     
     async def __aenter__(self):
         """支持 async with 语法"""
@@ -129,8 +140,8 @@ class CapMonsterClient:
                         raise CaptchaNetworkError(f"服务器错误: HTTP {resp.status}")
                     
                     if resp.status >= 400:
-                        text = await resp.text()
-                        raise CaptchaTaskError(f"请求失败: HTTP {resp.status} - {text[:200]}")
+                        # 不暴露响应内容，可能包含敏感信息
+                        raise CaptchaTaskError(f"请求失败: HTTP {resp.status}")
                     
                     try:
                         data = await resp.json()
@@ -149,10 +160,10 @@ class CapMonsterClient:
             except (ClientError, asyncio.TimeoutError) as e:
                 last_error = e
                 if attempt < retries - 1:
-                    logger.warning(f"请求失败 (尝试 {attempt + 1}/{retries}): {e}")
+                    logger.warning(f"请求失败 (尝试 {attempt + 1}/{retries}): {type(e).__name__}")
                     await asyncio.sleep(self.RETRY_DELAY * (attempt + 1))
                     continue
-                raise CaptchaNetworkError(f"网络请求失败: {e}") from e
+                raise CaptchaNetworkError(f"网络错误: {type(e).__name__}") from e
                 
             except CaptchaError:
                 raise

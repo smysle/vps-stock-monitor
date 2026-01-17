@@ -32,17 +32,25 @@ class SiteConfig:
 class TelegramConfig:
     """Telegram 配置"""
     enabled: bool = False
-    bot_token: str = ""
+    bot_token: str = field(default="", repr=False)  # 不在repr中显示
     chat_id: str = ""
     parse_mode: str = "HTML"
     disable_preview: bool = False
+    
+    def __repr__(self) -> str:
+        token_hint = "***" if self.bot_token else ""
+        return f"TelegramConfig(enabled={self.enabled}, bot_token='{token_hint}', chat_id='{self.chat_id}')"
 
 
 @dataclass
 class DiscordConfig:
     """Discord 配置"""
     enabled: bool = False
-    webhook_url: str = ""
+    webhook_url: str = field(default="", repr=False)
+    
+    def __repr__(self) -> str:
+        token_hint = "***" if self.webhook_url else ""
+        return f"DiscordConfig(enabled={self.enabled}, webhook_url='{token_hint}')"
 
 
 @dataclass
@@ -52,9 +60,13 @@ class EmailConfig:
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
     smtp_user: str = ""
-    smtp_password: str = ""
+    smtp_password: str = field(default="", repr=False)
     from_addr: str = ""
     to_addrs: List[str] = field(default_factory=list)
+    
+    def __repr__(self) -> str:
+        password_hint = "***" if self.smtp_password else ""
+        return f"EmailConfig(enabled={self.enabled}, smtp_host='{self.smtp_host}', smtp_password='{password_hint}')"
 
 
 @dataclass

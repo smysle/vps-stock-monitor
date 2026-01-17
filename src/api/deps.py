@@ -1,6 +1,7 @@
 """
 依赖注入模块
 """
+import asyncio
 import logging
 import threading
 from typing import Optional, AsyncGenerator
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 # Redis 连接池
 _redis_pool: Optional[redis.Redis] = None
-_redis_lock = threading.Lock()
+_redis_lock = asyncio.Lock()  # 使用异步锁
 
 # 监控器实例
 _monitor = None
@@ -24,56 +25,72 @@ async def init_redis() -> Optional[redis.Redis]:
     """初始化 Redis 连接"""
     global _redis_pool
     
-    config = get_config()
-    redis_config = config.get('redis', {})
-    
-    host = redis_config.get('host', 'localhost')
-    port = redis_config.get('port', 6379)
-    db = redis_config.get('db', 0)
-    password = redis_config.get('password') or None
-    
-    try:
-        _redis_pool = redis.Redis(
-            host=host,
-            port=port,
-            db=db,
-            password=password,
-            decode_responses=True,
-            encoding='utf-8',
-            socket_timeout=5.0,
-            socket_connect_timeout=5.0,
-        )
+    async with _redis_lock:
+        if _redis_pool is not None:
+            return _redis_pool
         
-        # 测试连接
-        await _redis_pool.ping()
-        logger.info(f"Redis 连接成功: {host}:{port}/{db}")
-        return _redis_pool
+        config = get_config()
+        redis_config = config.get('redis', {})
         
-    except Exception as e:
-        logger.warning(f"Redis 连接失败: {e}，将使用内存存储")
-        _redis_pool = None
-        return None
+        if not redis_config.get('enabled', True):
+            return None
+        
+        host = redis_config.get('host', 'localhost')
+        port = redis_config.get('port', 6379)
+        db = redis_config.get('db', 0)
+        password = redis_config.get('password') or None
+        
+        try:
+            _redis_pool = redis.Redis(
+                host=host,
+                port=port,
+                db=db,
+                password=password,
+                decode_responses=True,
+                encoding='utf-8',
+                socket_timeout=5.0,
+                socket_connect_timeout=5.0,
+                max_connections=20,  # 添加连接限制
+                retry_on_timeout=True,
+            )
+            
+            # 测试连接
+            await _redis_pool.ping()
+            logger.info("Redis 连接成功")
+            logger.debug(f"Redis 连接详情: {host}:{port}/{db}")
+            return _redis_pool
+            
+        except Exception as e:
+            logger.warning(f"Redis 连接失败: {e}，将使用内存存储")
+            _redis_pool = None
+            return None
 
 
 async def close_redis():
     """关闭 Redis 连接"""
     global _redis_pool
     
-    with _redis_lock:
+    async with _redis_lock:
         if _redis_pool:
             try:
                 await _redis_pool.close()
-                await _redis_pool.connection_pool.disconnect()
+                logger.info("Redis 连接已关闭")
             except Exception as e:
                 logger.warning(f"关闭 Redis 连接时出错: {e}")
             finally:
                 _redis_pool = None
-            logger.info("Redis 连接已关闭")
 
 
 async def get_redis() -> Optional[redis.Redis]:
     """获取 Redis 连接（依赖注入）"""
-    return _redis_pool
+    if _redis_pool:
+        try:
+            await _redis_pool.ping()
+            return _redis_pool
+        except Exception:
+            logger.warning("Redis 连接已断开")
+            return None
+    return None
 
 
 def get_config_dep() -> ConfigManager:

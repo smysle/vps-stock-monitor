@@ -4,6 +4,7 @@ Discord 通知
 import asyncio
 import logging
 import re
+import warnings
 import aiohttp
 from aiohttp import ClientError, ClientTimeout
 from typing import Optional, List, Dict, Any
@@ -34,6 +35,11 @@ class DiscordNotifier(NotificationProvider):
     # 有效 ID 正则
     VALID_ID_PATTERN = re.compile(r'^\d{17,20}$')
     
+    # Discord Webhook URL 验证正则
+    DISCORD_WEBHOOK_PATTERN = re.compile(
+        r'^https://(discord\.com|discordapp\.com)/api/webhooks/\d+/[\w-]+$'
+    )
+    
     def __init__(
         self,
         webhook_url: str,
@@ -51,7 +57,14 @@ class DiscordNotifier(NotificationProvider):
             avatar_url: Bot 头像 URL
             mention_roles: 要 @ 的角色 ID 列表
             mention_users: 要 @ 的用户 ID 列表
+        
+        Raises:
+            ValueError: 如果 webhook_url 格式无效
         """
+        # 验证 Webhook URL 格式
+        if not self.DISCORD_WEBHOOK_PATTERN.match(webhook_url):
+            raise ValueError("Invalid Discord webhook URL format")
+        
         self._webhook_url = webhook_url  # 私有属性，不暴露
         self.username = username
         self.avatar_url = avatar_url
@@ -62,7 +75,24 @@ class DiscordNotifier(NotificationProvider):
     
     def __repr__(self) -> str:
         """安全的字符串表示（不暴露 webhook URL）"""
-        return f"DiscordNotifier(username={self.username})"
+        return f"DiscordNotifier(username='{self.username}', webhook_url='***')"
+    
+    async def __aenter__(self):
+        """异步上下文管理器入口"""
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """异步上下文管理器退出"""
+        await self.close()
+    
+    def __del__(self):
+        """析构函数 - 检测资源泄露"""
+        if hasattr(self, '_session') and self._session and not self._session.closed:
+            warnings.warn(
+                f"{self.__class__.__name__} was not properly closed. "
+                "Use 'async with' or call 'await close()' explicitly.",
+                ResourceWarning
+            )
     
     @property
     def name(self) -> str:

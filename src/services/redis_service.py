@@ -79,10 +79,13 @@ class RedisService:
                 encoding='utf-8',
                 socket_timeout=5.0,
                 socket_connect_timeout=5.0,
+                max_connections=20,  # 添加连接限制
+                retry_on_timeout=True,
             )
             
             await client.ping()
-            logger.info(f"Redis 连接成功: {host}:{port}/{db}")
+            logger.info("Redis 连接成功")
+            logger.debug(f"Redis 连接详情: {host}:{port}/{db}")
             
             cls._instance = cls(client)
             return cls._instance
