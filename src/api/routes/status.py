@@ -165,15 +165,24 @@ async def get_stats(
             if stats['total_checks'] > 0:
                 stats['average_check_duration_ms'] = total_duration // stats['total_checks']
         
-        # 产品状态统计
+        # 产品状态统计 - 使用 Pipeline 批量获取，避免 N+1
         all_products = await redis_client.hgetall("vps_monitor:products")
-        for product_id in all_products.keys():
-            status_key = f"vps_monitor:product_status:{product_id}"
-            status = await redis_client.hget(status_key, 'status')
-            if status in stats['products_by_status']:
-                stats['products_by_status'][status] += 1
-            else:
-                stats['products_by_status']['unknown'] += 1
+        if all_products:
+            product_ids = list(all_products.keys())
+            
+            # 使用 Pipeline 批量获取所有产品状态
+            pipe = redis_client.pipeline()
+            for product_id in product_ids:
+                status_key = f"vps_monitor:product_status:{product_id}"
+                pipe.hget(status_key, 'status')
+            
+            statuses = await pipe.execute()
+            
+            for status in statuses:
+                if status in stats['products_by_status']:
+                    stats['products_by_status'][status] += 1
+                else:
+                    stats['products_by_status']['unknown'] += 1
     
     return stats
 

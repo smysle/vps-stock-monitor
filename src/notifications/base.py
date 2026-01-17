@@ -153,30 +153,49 @@ class NotificationManager:
     
     async def send_all(self, message: NotificationMessage) -> dict:
         """
-        向所有提供者发送通知
+        向所有提供者并发发送通知
         
         Returns:
             {provider_name: success}
         """
-        results = {}
-        for provider in self.providers:
+        import asyncio
+        
+        if not self.providers:
+            return {}
+        
+        async def send_to_provider(provider: NotificationProvider) -> tuple:
             try:
-                results[provider.name] = await provider.send(message)
-            except Exception as e:
-                results[provider.name] = False
-        return results
+                result = await provider.send(message)
+                return (provider.name, result)
+            except Exception:
+                return (provider.name, False)
+        
+        # 并发发送到所有提供者
+        tasks = [send_to_provider(p) for p in self.providers]
+        results_list = await asyncio.gather(*tasks)
+        
+        return dict(results_list)
     
     async def test_all(self) -> dict:
         """
-        测试所有提供者
+        并发测试所有提供者
         
         Returns:
             {provider_name: success}
         """
-        results = {}
-        for provider in self.providers:
+        import asyncio
+        
+        if not self.providers:
+            return {}
+        
+        async def test_provider(provider: NotificationProvider) -> tuple:
             try:
-                results[provider.name] = await provider.test()
+                result = await provider.test()
+                return (provider.name, result)
             except Exception:
-                results[provider.name] = False
-        return results
+                return (provider.name, False)
+        
+        tasks = [test_provider(p) for p in self.providers]
+        results_list = await asyncio.gather(*tasks)
+        
+        return dict(results_list)

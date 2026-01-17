@@ -121,19 +121,39 @@ async def clear_cache(
     redis_client: redis.Redis = Depends(get_redis)
 ):
     """清除缓存"""
+    deleted_count = 0
+    
     if redis_client:
-        # 清除状态缓存
-        keys = await redis_client.keys("vps_monitor:product_status:*")
-        if keys:
-            await redis_client.delete(*keys)
+        # 使用 SCAN 替代 KEYS，避免阻塞 Redis
+        cursor = 0
+        keys_to_delete = []
         
-        logger.info(f"已清除 {len(keys)} 个状态缓存")
+        while True:
+            cursor, keys = await redis_client.scan(
+                cursor=cursor,
+                match="vps_monitor:product_status:*",
+                count=100
+            )
+            keys_to_delete.extend(keys)
+            if cursor == 0:
+                break
+        
+        # 批量删除
+        if keys_to_delete:
+            deleted_count = len(keys_to_delete)
+            # 使用 Pipeline 批量删除
+            pipe = redis_client.pipeline()
+            for key in keys_to_delete:
+                pipe.delete(key)
+            await pipe.execute()
+        
+        logger.info(f"已清除 {deleted_count} 个状态缓存")
     
     monitor = get_monitor()
     if monitor:
         monitor.clear_cache()
     
-    return SuccessResponse(message="缓存已清除")
+    return SuccessResponse(message=f"已清除 {deleted_count} 个缓存")
 
 
 @router.get("/health")

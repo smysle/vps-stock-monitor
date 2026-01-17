@@ -220,6 +220,10 @@ class ConfigManager:
         
         # 加载配置
         self.load()
+        
+        # 缓存
+        self._site_configs_cache: Optional[Dict[str, SiteConfig]] = None
+        self._products_cache: Optional[List[ProductConfig]] = None
     
     def load(self) -> bool:
         """加载配置文件"""
@@ -250,6 +254,9 @@ class ConfigManager:
             if self.load():
                 # 检查配置是否有变化
                 if old_config != self._config_data:
+                    # 清除缓存
+                    self._site_configs_cache = None
+                    self._products_cache = None
                     logger.info("配置已更新，触发回调...")
                     self._notify_callbacks()
                 return True
@@ -418,7 +425,10 @@ class ConfigManager:
     
     @property
     def site_configs(self) -> Dict[str, SiteConfig]:
-        """站点配置"""
+        """站点配置（带缓存）"""
+        if self._site_configs_cache is not None:
+            return self._site_configs_cache
+        
         configs = DEFAULT_SITE_CONFIGS.copy()
         
         data = self.get('sites', {})
@@ -433,6 +443,7 @@ class ConfigManager:
                     custom_headers=config.get('custom_headers', {})
                 )
         
+        self._site_configs_cache = configs
         return configs
     
     def get_site_config(self, site: str) -> SiteConfig:

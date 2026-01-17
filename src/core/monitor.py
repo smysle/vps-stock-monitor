@@ -3,6 +3,7 @@ VPS 库存监控引擎
 """
 import asyncio
 import logging
+import re
 from datetime import datetime
 from typing import Optional, List, Dict, Callable, Any, Union
 from dataclasses import dataclass, field
@@ -19,6 +20,31 @@ from .browser import BrowserManager
 
 
 logger = logging.getLogger(__name__)
+
+# 预编译价格解析正则
+PRICE_PATTERN = re.compile(r'[^\d.,]')
+
+# 预定义库存状态检测文本（元组比列表查找更快）
+OUT_OF_STOCK_TEXTS = (
+    "out of stock",
+    "sold out",
+    "unavailable",
+    "not available",
+    "缺货",
+    "已售罄",
+    "暂无库存"
+)
+
+IN_STOCK_TEXTS = (
+    "add to cart",
+    "order now",
+    "buy now",
+    "in stock",
+    "available",
+    "立即购买",
+    "加入购物车",
+    "有货"
+)
 
 
 @dataclass
@@ -154,12 +180,12 @@ class VPSMonitor:
         """解析页面中的库存状态"""
         site_config = self.config.get_site_config(product.site)
         
-        # 获取页面内容
+        # 只获取一次页面内容并缓存
         content = await page.content()
         content_lower = content.lower()
         
-        # 检查缺货标识
-        out_of_stock_indicators = [
+        # 检查缺货标识（预编译列表）
+        out_of_stock_indicators = (
             site_config.out_of_stock_text.lower(),
             "out of stock",
             "sold out",
@@ -168,7 +194,7 @@ class VPSMonitor:
             "缺货",
             "已售罄",
             "暂无库存"
-        ]
+        )
         
         is_out_of_stock = any(
             indicator in content_lower
@@ -176,7 +202,7 @@ class VPSMonitor:
         )
         
         # 检查有货标识
-        in_stock_indicators = [
+        in_stock_indicators = (
             "add to cart",
             "order now",
             "buy now",
@@ -185,7 +211,7 @@ class VPSMonitor:
             "立即购买",
             "加入购物车",
             "有货"
-        ]
+        )
         
         is_in_stock = any(
             indicator in content_lower
@@ -229,11 +255,9 @@ class VPSMonitor:
         )
     
     def _parse_price(self, price_text: str) -> Optional[float]:
-        """解析价格文本"""
-        import re
-        
-        # 移除货币符号和空格
-        cleaned = re.sub(r'[^\d.,]', '', price_text)
+        """解析价格文本（使用预编译正则）"""
+        # 使用预编译正则，移除货币符号和空格
+        cleaned = PRICE_PATTERN.sub('', price_text)
         
         # 处理不同的数字格式
         if ',' in cleaned and '.' in cleaned:
