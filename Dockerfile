@@ -23,10 +23,10 @@ USER appuser
 
 # 健康检查
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)" || exit 0
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:18463/api/health', timeout=5)" || exit 0
 
 # 暴露端口
-EXPOSE 8000
+EXPOSE 18463
 
 # 启动命令
 CMD ["python", "main.py", "--api"]

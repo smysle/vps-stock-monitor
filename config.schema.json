@@ -330,7 +330,7 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 65535,
-          "default": 8000
+          "default": 18463
         },
         "websocket_timeout": {
           "type": "number",

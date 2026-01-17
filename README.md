@@ -4,7 +4,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![Playwright](https://img.shields.io/badge/Playwright-1.40+-green.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg)
 ![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 [![CI](https://github.com/smysle/vps-stock-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/smysle/vps-stock-monitor/actions/workflows/ci.yml)
@@ -132,17 +132,17 @@ products:
 api:
   enabled: true
   host: "127.0.0.1"
-  port: 8000
+  port: 18463
   auth:
-    enabled: true
-    api_key: "your_secure_api_key"
+    enabled: true  # ⚠️ 生产环境必须启用
+    api_key: "your_secure_api_key"  # 必须修改！
 ```
 
 完整配置示例请参考 [config.yaml.example](config.yaml.example)
 
 ## 🌐 Web 管理面板
 
-启动后访问 `http://localhost:8000` 即可使用管理面板：
+启动后访问 `http://localhost:18463` 即可使用管理面板：
 
 - **仪表盘** - 查看监控状态、统计信息
 - **产品管理** - 添加、编辑、删除监控产品
@@ -159,18 +159,41 @@ api:
 | GET | `/api/history` | 检查历史 |
 | WS | `/ws` | WebSocket 实时推送 |
 
-API 文档：`http://localhost:8000/docs`
+API 文档：`http://localhost:18463/docs`
 
 ## 🔒 安全特性
 
-本项目经过安全审计，包含以下防护措施：
+本项目经过完整安全审计（120+ 问题已修复），包含以下防护措施：
 
-- ✅ API Key 时序安全比较（防时序攻击）
-- ✅ HTML/Markdown 输出转义（防 XSS）
-- ✅ URL 验证（防 SSRF）
-- ✅ WebSocket 认证 + 连接数限制
-- ✅ 敏感信息自动脱敏
-- ✅ 配置文件权限检查
+### 已实现的安全措施
+
+| 类别 | 措施 |
+|------|------|
+| **认证** | API Key 认证（默认启用）、时序安全比较 |
+| **输入验证** | URL 白名单验证、正则格式验证、类型安全转换 |
+| **SSRF 防护** | 内网 IP 阻止列表、Scheme 白名单 |
+| **XSS 防护** | HTML/Markdown 输出转义 |
+| **注入防护** | 邮件头注入防护、命令注入防护 |
+| **凭据保护** | 敏感字段 `repr=False`、自定义 `__repr__` |
+| **连接安全** | WebSocket 认证 + 连接数限制 |
+| **资源管理** | 上下文管理器、优雅关闭 |
+| **容器安全** | 非 root 用户运行、最小权限 |
+
+### 安全配置建议
+
+```yaml
+# ⚠️ 生产环境安全清单
+api:
+  auth:
+    enabled: true  # 必须启用
+    api_key: "使用 32+ 字符随机字符串"
+    # 生成命令: python -c "import secrets; print(secrets.token_urlsafe(32))"
+  cors_origins:
+    - "https://your-domain.com"  # 限制为你的域名
+
+redis:
+  password: "设置强密码"  # 生产环境必须
+```
 
 ## 📁 项目结构
 
@@ -179,19 +202,22 @@ vps-stock-monitor/
 ├── config.yaml.example     # 配置示例
 ├── config.schema.json      # 配置 JSON Schema
 ├── main.py                 # 主程序入口
-├── Dockerfile              # Docker 构建
-├── docker-compose.yml      # Docker Compose
-├── requirements.txt        # Python 依赖
+├── Dockerfile              # Docker 构建（非 root 用户）
+├── docker-compose.yml      # Docker Compose（含 Redis）
+├── requirements.txt        # Python 依赖（版本锁定）
 └── src/
     ├── api/                # FastAPI Web 应用
     │   ├── app.py          # 应用工厂
+    │   ├── deps.py         # 依赖注入
+    │   ├── schemas.py      # 数据验证
     │   ├── routes/         # API 路由
     │   └── static/         # 静态文件
     ├── captcha/            # 验证码解决
     │   ├── capmonster.py   # CapMonster 客户端
     │   └── solver.py       # 验证码解决器
     ├── config/             # 配置管理
-    │   └── settings.py     # 配置加载 + 热重载
+    │   ├── settings.py     # 配置加载 + 热重载
+    │   └── products.py     # 产品定义
     ├── core/               # 核心逻辑
     │   ├── browser.py      # 浏览器管理
     │   ├── monitor.py      # 监控逻辑
@@ -200,6 +226,8 @@ vps-stock-monitor/
     │   ├── telegram.py     # Telegram
     │   ├── discord.py      # Discord
     │   └── email.py        # 邮件
+    ├── services/           # 服务层
+    │   └── redis_service.py # Redis 服务
     └── utils/              # 工具模块
         ├── security.py     # 安全工具
         ├── retry.py        # 重试机制
@@ -211,7 +239,7 @@ vps-stock-monitor/
 ```bash
 # 安装开发依赖
 pip install -r requirements.txt
-pip install pytest pytest-asyncio ruff
+pip install pytest pytest-asyncio ruff mypy
 
 # 运行测试
 pytest tests/ -v
@@ -219,20 +247,31 @@ pytest tests/ -v
 # 代码检查
 ruff check src/
 
+# 类型检查
+mypy src/
+
 # 开发模式运行
 python main.py --api --debug
 ```
 
 ## 📝 更新日志
 
+### v1.1.0 (2026-01-18)
+
+- 🔒 完成二次安全审计
+- 🔧 修改默认端口为 18463（避免常用端口冲突）
+- 📝 更新文档
+
 ### v1.0.0 (2026-01-18)
 
 - 🎉 首次发布
-- ✅ 完成安全审计（114 项问题已修复）
-- 🔒 Phase 1: 安全漏洞修复 (21 项)
-- 🛡️ Phase 2: 稳定性修复 (29 项)
-- 💪 Phase 3: 健壮性改进 (33 项)
-- ✨ Phase 4: 代码质量优化 (31 项)
+- ✅ 完成安全审计（120 项问题已修复）
+  - 🔴 Critical: 8 项
+  - 🟠 High: 27 项
+  - 🟡 Medium: 45+ 项
+- 🔒 SSRF 防护、注入防护、凭据保护
+- 🐳 Docker 部署优化（非 root 用户）
+- 📦 依赖版本锁定
 
 ## 📄 许可证
 
@@ -243,3 +282,4 @@ MIT License
 - [Playwright](https://playwright.dev/) - 浏览器自动化
 - [CapMonster Cloud](https://capmonster.cloud/) - 验证码解决服务
 - [FastAPI](https://fastapi.tiangolo.com/) - Web 框架
+- [Redis](https://redis.io/) - 缓存和消息队列

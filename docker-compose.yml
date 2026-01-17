@@ -19,7 +19,7 @@ services:
     container_name: vps-monitor
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "18463:18463"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./data:/app/data

@@ -197,7 +197,7 @@ redis:
 api:
   enabled: true
   host: "127.0.0.1"
-  port: 8000
+  port: 18463
   
   # ⚠️ API 认证配置 - 生产环境必须启用
   auth:
@@ -209,6 +209,6 @@ api:
   
   # CORS 配置 - 生产环境必须限制来源
   cors_origins:
-    - "http://localhost:8000"
+    - "http://localhost:18463"
     # 生产环境添加你的域名:
     # - "https://your-domain.com"

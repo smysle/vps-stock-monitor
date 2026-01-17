@@ -408,8 +408,8 @@ def parse_args():
     parser.add_argument(
         "--port",
         type=int,
-        default=8000,
-        help="API 服务器监听端口 (默认: 8000)"
+        default=18463,
+        help="API 服务器监听端口 (默认: 18463)"
     )
     
     return parser.parse_args()
@@ -516,7 +516,7 @@ async def run_with_api(cfg: ConfigManager, args):
     await shutdown()
 
 
-async def run_api_server_async(host: str = "0.0.0.0", port: int = 8000):
+async def run_api_server_async(host: str = "0.0.0.0", port: int = 18463):
     """异步启动 FastAPI 服务器"""
     import uvicorn
     from src.api.app import create_app
@@ -527,7 +527,7 @@ async def run_api_server_async(host: str = "0.0.0.0", port: int = 8000):
     await server.serve()
 
 
-def run_api_server(host: str = "0.0.0.0", port: int = 8000):
+def run_api_server(host: str = "0.0.0.0", port: int = 18463):
     """启动 FastAPI 服务器"""
     import uvicorn
     from src.api.app import create_app
