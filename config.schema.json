@@ -1,0 +1,371 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "VPS Monitor Configuration",
+  "description": "VPS 补货监控系统配置文件 Schema",
+  "type": "object",
+  "properties": {
+    "capmonster": {
+      "type": "object",
+      "description": "CapMonster Cloud 配置",
+      "properties": {
+        "api_key": {
+          "type": "string",
+          "minLength": 1,
+          "description": "CapMonster Cloud API Key"
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 300,
+          "default": 120,
+          "description": "验证码解决超时时间（秒）"
+        }
+      },
+      "required": ["api_key"]
+    },
+    "monitor": {
+      "type": "object",
+      "description": "监控配置",
+      "properties": {
+        "check_interval": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 86400,
+          "default": 300,
+          "description": "检查间隔（秒）"
+        },
+        "retry_interval": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 3600,
+          "default": 60,
+          "description": "失败后重试间隔（秒）"
+        },
+        "max_retries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 3,
+          "description": "最大重试次数"
+        },
+        "concurrent_checks": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 1,
+          "description": "并发检查数"
+        }
+      }
+    },
+    "browser": {
+      "type": "object",
+      "description": "浏览器配置",
+      "properties": {
+        "headless": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否无头模式"
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 120000,
+          "default": 30000,
+          "description": "页面加载超时（毫秒）"
+        },
+        "viewport": {
+          "type": "object",
+          "properties": {
+            "width": {
+              "type": "integer",
+              "minimum": 320,
+              "maximum": 3840,
+              "default": 1920
+            },
+            "height": {
+              "type": "integer",
+              "minimum": 240,
+              "maximum": 2160,
+              "default": 1080
+            }
+          }
+        },
+        "proxy": {
+          "type": ["string", "null"],
+          "pattern": "^(http|https|socks5)://",
+          "description": "代理服务器地址"
+        }
+      }
+    },
+    "notifications": {
+      "type": "object",
+      "description": "通知配置",
+      "properties": {
+        "telegram": {
+          "type": "object",
+          "properties": {
+            "enabled": {"type": "boolean", "default": false},
+            "bot_token": {"type": "string"},
+            "chat_id": {"type": "string"},
+            "parse_mode": {
+              "type": "string",
+              "enum": ["HTML", "Markdown", "MarkdownV2"],
+              "default": "HTML"
+            }
+          },
+          "if": {"properties": {"enabled": {"const": true}}},
+          "then": {"required": ["bot_token", "chat_id"]}
+        },
+        "discord": {
+          "type": "object",
+          "properties": {
+            "enabled": {"type": "boolean", "default": false},
+            "webhook_url": {
+              "type": "string",
+              "pattern": "^https://discord\\.com/api/webhooks/"
+            },
+            "username": {"type": "string", "default": "VPS Monitor"},
+            "mention_roles": {
+              "type": "array",
+              "items": {"type": "string", "pattern": "^\\d{17,20}$"}
+            },
+            "mention_users": {
+              "type": "array",
+              "items": {"type": "string", "pattern": "^\\d{17,20}$"}
+            }
+          },
+          "if": {"properties": {"enabled": {"const": true}}},
+          "then": {"required": ["webhook_url"]}
+        },
+        "email": {
+          "type": "object",
+          "properties": {
+            "enabled": {"type": "boolean", "default": false},
+            "smtp_host": {"type": "string"},
+            "smtp_port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "default": 587
+            },
+            "smtp_user": {"type": "string"},
+            "smtp_pass": {"type": "string"},
+            "from_addr": {"type": "string", "format": "email"},
+            "to_addrs": {
+              "type": "array",
+              "items": {"type": "string", "format": "email"},
+              "minItems": 1
+            },
+            "use_tls": {"type": "boolean", "default": true},
+            "use_ssl": {"type": "boolean", "default": false}
+          },
+          "if": {"properties": {"enabled": {"const": true}}},
+          "then": {"required": ["smtp_host", "smtp_user", "smtp_pass", "to_addrs"]}
+        },
+        "bark": {
+          "type": "object",
+          "properties": {
+            "enabled": {"type": "boolean", "default": false},
+            "server_url": {"type": "string", "format": "uri"},
+            "device_key": {"type": "string"}
+          }
+        }
+      }
+    },
+    "products": {
+      "type": "array",
+      "description": "监控产品列表",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "产品名称"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https?://",
+            "description": "产品页面 URL"
+          },
+          "site": {
+            "type": "string",
+            "minLength": 1,
+            "description": "站点标识"
+          },
+          "description": {
+            "type": "string",
+            "description": "产品描述"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "是否启用监控"
+          },
+          "check_interval": {
+            "type": ["integer", "null"],
+            "minimum": 10,
+            "description": "自定义检查间隔"
+          },
+          "stock_selector": {
+            "type": ["string", "null"],
+            "description": "自定义库存选择器"
+          },
+          "price_selector": {
+            "type": ["string", "null"],
+            "description": "自定义价格选择器"
+          },
+          "out_of_stock_text": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "缺货标识文本"
+          },
+          "in_stock_text": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "有货标识文本"
+          }
+        },
+        "required": ["name", "url", "site"]
+      }
+    },
+    "sites": {
+      "type": "object",
+      "description": "站点配置",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "stock_selector": {"type": "string"},
+          "price_selector": {"type": "string"},
+          "out_of_stock_text": {"type": "string"},
+          "wait_time": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 30000,
+            "default": 3000
+          },
+          "needs_browser": {"type": "boolean", "default": true},
+          "custom_headers": {
+            "type": "object",
+            "additionalProperties": {"type": "string"}
+          }
+        }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "description": "日志配置",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+          "default": "INFO"
+        },
+        "file": {
+          "type": "string",
+          "default": "logs/monitor.log"
+        },
+        "max_size": {
+          "type": "integer",
+          "minimum": 1048576,
+          "default": 10485760,
+          "description": "日志文件最大大小（字节）"
+        },
+        "backup_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 5
+        }
+      }
+    },
+    "data": {
+      "type": "object",
+      "description": "数据存储配置",
+      "properties": {
+        "dir": {"type": "string", "default": "./data"},
+        "save_history": {"type": "boolean", "default": true},
+        "max_global_history": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 100000,
+          "default": 1000
+        },
+        "max_product_history": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 10000,
+          "default": 100
+        }
+      }
+    },
+    "redis": {
+      "type": "object",
+      "description": "Redis 配置",
+      "properties": {
+        "host": {"type": "string", "default": "localhost"},
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 6379
+        },
+        "db": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15,
+          "default": 0
+        },
+        "password": {"type": ["string", "null"]}
+      }
+    },
+    "api": {
+      "type": "object",
+      "description": "API 配置",
+      "properties": {
+        "enabled": {"type": "boolean", "default": true},
+        "host": {"type": "string", "default": "127.0.0.1"},
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 8000
+        },
+        "websocket_timeout": {
+          "type": "number",
+          "minimum": 5,
+          "maximum": 300,
+          "default": 30
+        },
+        "cors_origins": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": []
+        },
+        "auth": {
+          "type": "object",
+          "properties": {
+            "enabled": {"type": "boolean", "default": false},
+            "api_key": {
+              "type": "string",
+              "minLength": 16,
+              "description": "API 认证密钥，建议至少 32 字符"
+            }
+          },
+          "if": {"properties": {"enabled": {"const": true}}},
+          "then": {"required": ["api_key"]}
+        }
+      }
+    },
+    "affiliates": {
+      "type": "object",
+      "description": "推广链接配置",
+      "additionalProperties": {
+        "type": "string",
+        "description": "推广 ID"
+      }
+    }
+  },
+  "required": ["capmonster", "products"]
+}

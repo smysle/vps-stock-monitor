@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  vps-monitor:
+    build: .
+    container_name: vps-stock-monitor
+    restart: unless-stopped
+    environment:
+      # CapMonster Cloud API
+      - CAPMONSTER_API_KEY=${CAPMONSTER_API_KEY}
+      
+      # Telegram 通知
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      
+      # Discord 通知 (可选)
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      
+      # 监控设置
+      - CHECK_INTERVAL=${CHECK_INTERVAL:-300}
+      - HEADLESS=${HEADLESS:-true}
+      - BROWSER_TIMEOUT=${BROWSER_TIMEOUT:-30000}
+      
+      # 代理设置 (可选)
+      - PROXY_ENABLED=${PROXY_ENABLED:-false}
+      - PROXY_URL=${PROXY_URL:-}
+    volumes:
+      # 数据持久化
+      - ./data:/app/data
+      - ./logs:/app/logs
+      # 自定义配置 (可选)
+      - ./config.json:/app/config.json:ro
+    networks:
+      - monitor-net
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  monitor-net:
+    driver: bridge

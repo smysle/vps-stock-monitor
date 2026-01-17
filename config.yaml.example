@@ -1,0 +1,209 @@
+# ============================================================
+#  VPS 补货监控系统配置文件
+#  支持热重载：修改后自动生效，无需重启
+# ============================================================
+
+# ==================== CapMonster Cloud ====================
+capmonster:
+  api_key: "your_capmonster_api_key_here"  # 从 https://capmonster.cloud 获取
+
+# ==================== 通知配置 ====================
+notifications:
+  # Telegram 通知
+  telegram:
+    enabled: true
+    bot_token: "your_telegram_bot_token_here"  # 从 @BotFather 获取
+    chat_id: "your_chat_id_here"               # 从 @userinfobot 获取
+    parse_mode: "HTML"                         # HTML / Markdown / MarkdownV2
+    disable_preview: false                     # 是否禁用链接预览
+  
+  # Discord 通知
+  discord:
+    enabled: false
+    webhook_url: ""
+  
+  # 邮件通知
+  email:
+    enabled: false
+    smtp_host: "smtp.gmail.com"
+    smtp_port: 587
+    smtp_user: ""
+    smtp_password: ""
+    from_addr: ""
+    to_addrs: []
+
+# ==================== 监控配置 ====================
+monitor:
+  check_interval: 300      # 检查间隔（秒），默认 5 分钟
+  retry_interval: 60       # 失败重试间隔（秒）
+  max_retries: 3           # 最大重试次数
+  concurrent_checks: 3     # 并发检查数量
+  
+# ==================== 浏览器配置 ====================
+browser:
+  headless: true           # 无头模式
+  timeout: 30000           # 超时时间（毫秒）
+  user_agent: ""           # 自定义 UA（留空使用默认）
+
+# ==================== 代理配置 ====================
+proxy:
+  enabled: false
+  url: ""                  # 格式: http://user:pass@host:port
+
+# ==================== Affiliate 推广配置 ====================
+# 配置后，通知中的链接会自动添加推广参数
+# 各商家参数格式：
+#   - 搬瓦工: ?aff=ID
+#   - DMIT: ?aff=ID
+#   - RackNerd: ?aff=ID
+#   - CloudCone: ?ref=ID
+#   - HostDare: ?aff=ID
+#   - Vultr: ?ref=ID
+affiliates:
+  bandwagonhost.com: ""    # 搬瓦工推广 ID
+  bwh81.net: ""            # 搬瓦工备用域名
+  dmit.io: ""              # DMIT 推广 ID
+  racknerd.com: ""         # RackNerd 推广 ID
+  hostdare.com: ""         # HostDare 推广 ID
+  cloudcone.com: ""        # CloudCone 推广 ID
+  greencloudvps.com: ""    # GreenCloud 推广 ID
+  spartanhost.net: ""      # Spartan Host 推广 ID
+  buyvm.net: ""            # BuyVM 推广 ID
+
+# ==================== 产品列表 ====================
+# 可以在这里直接配置要监控的产品，也可以在 products.py 中配置
+products:
+  # -------------------- 搬瓦工 --------------------
+  - name: "搬瓦工 THE PLAN (限量版)"
+    url: "https://bwh81.net/cart.php?a=add&pid=144"
+    site: bandwagonhost
+    enabled: true
+    description: "年付 $99.99 | CN2 GIA | 洛杉矶"
+  
+  - name: "搬瓦工 CN2 GIA-E 20G"
+    url: "https://bwh81.net/cart.php?a=add&pid=87"
+    site: bandwagonhost
+    enabled: true
+    description: "季付 $49.99 | CN2 GIA-E | 洛杉矶"
+  
+  - name: "搬瓦工 CN2 GIA-E 40G"
+    url: "https://bwh81.net/cart.php?a=add&pid=88"
+    site: bandwagonhost
+    enabled: true
+    description: "季付 $89.99 | CN2 GIA-E | 洛杉矶"
+  
+  - name: "搬瓦工 香港 CN2 GIA"
+    url: "https://bwh81.net/cart.php?a=add&pid=95"
+    site: bandwagonhost
+    enabled: true
+    description: "月付 $89.99 | CN2 GIA | 香港"
+  
+  - name: "搬瓦工 日本软银 JPOS_1"
+    url: "https://bwh81.net/cart.php?a=add&pid=134"
+    site: bandwagonhost
+    enabled: true
+    description: "季付 $49.99 | 软银 | 日本大阪"
+  
+  # -------------------- DMIT --------------------
+  - name: "DMIT LAX.Pro.TINY"
+    url: "https://www.dmit.io/cart.php?a=add&pid=183"
+    site: dmit
+    enabled: true
+    description: "年付 $28.88 | CN2 GIA | 洛杉矶"
+  
+  - name: "DMIT LAX.Pro.Pocket"
+    url: "https://www.dmit.io/cart.php?a=add&pid=184"
+    site: dmit
+    enabled: true
+    description: "季付 $14.9 | CN2 GIA | 洛杉矶"
+  
+  - name: "DMIT HKG.Pro.TINY"
+    url: "https://www.dmit.io/cart.php?a=add&pid=154"
+    site: dmit
+    enabled: true
+    description: "年付 $39.9 | CN2 GIA | 香港"
+  
+  - name: "DMIT TYO.Pro.TINY"
+    url: "https://www.dmit.io/cart.php?a=add&pid=188"
+    site: dmit
+    enabled: true
+    description: "年付 $39.9 | CN2 GIA | 东京"
+  
+  # -------------------- RackNerd --------------------
+  - name: "RackNerd 768MB KVM"
+    url: "https://my.racknerd.com/cart.php?a=add&pid=695"
+    site: racknerd
+    enabled: false
+    description: "年付 $10.18 | 1核 768MB | 洛杉矶"
+  
+  # -------------------- CloudCone --------------------
+  - name: "CloudCone SC2 1G"
+    url: "https://app.cloudcone.com/compute/1399/create"
+    site: cloudcone
+    enabled: false
+    description: "年付 $14.2 | 1核 1GB | 洛杉矶"
+
+# ==================== 站点配置 ====================
+# 自定义站点的选择器和检测规则
+sites:
+  bandwagonhost.com:
+    stock_selector: ".order-summary, .product-info, #order-boxes"
+    out_of_stock_text: "Out of Stock"
+    price_selector: ".product-price, .cycle-price"
+    wait_time: 3000
+  
+  dmit.io:
+    stock_selector: ".product-stock-status, .order-summary, .product-info"
+    out_of_stock_text: "Out of Stock"
+    price_selector: ".product-price, .price"
+    wait_time: 3000
+  
+  racknerd.com:
+    stock_selector: ".product-status, .order-summary, .product-info"
+    out_of_stock_text: "Out of Stock"
+    price_selector: ".price, .product-price"
+    wait_time: 2000
+  
+  cloudcone.com:
+    stock_selector: ".product-status, .order-summary"
+    out_of_stock_text: "Out of Stock"
+    price_selector: ".price"
+    wait_time: 2000
+
+# ==================== 日志配置 ====================
+logging:
+  level: INFO              # DEBUG / INFO / WARNING / ERROR
+  file: "logs/monitor.log"
+  max_size: 10485760       # 10MB
+  backup_count: 5
+
+# ==================== 数据存储 ====================
+data:
+  dir: "./data"
+  save_history: true       # 是否保存历史记录
+  max_global_history: 1000 # 全局历史记录最大条数
+  max_product_history: 100 # 单产品历史记录最大条数
+
+# ==================== Redis 配置 ====================
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  password: ""             # ⚠️ 生产环境请务必设置密码
+
+# ==================== API 配置 ====================
+api:
+  enabled: true
+  host: "127.0.0.1"        # 默认只监听本地，生产环境建议使用反向代理
+  port: 8000
+  websocket_timeout: 30.0  # WebSocket 心跳超时（秒）
+  
+  # CORS 配置
+  cors_origins:            # ⚠️ 生产环境请设置具体域名
+    - "http://localhost:3000"
+    # - "https://your-domain.com"
+  
+  # 认证配置
+  auth:
+    enabled: false         # ⚠️ 生产环境请启用认证
+    api_key: ""            # 启用后需要在请求头带 X-API-Key

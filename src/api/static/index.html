@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VPS 补货监控系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css" rel="stylesheet">
+    <style>
+        .status-in_stock { color: #10b981; }
+        .status-out_of_stock { color: #ef4444; }
+        .status-unknown { color: #6b7280; }
+        .status-error { color: #f59e0b; }
+        .status-checking { color: #3b82f6; }
+        
+        .pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        
+        .toast { 
+            position: fixed; bottom: 20px; right: 20px; 
+            padding: 12px 24px; border-radius: 8px;
+            color: white; z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+        .toast.success { background: #10b981; }
+        .toast.error { background: #ef4444; }
+        .toast.info { background: #3b82f6; }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        .modal {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); display: flex;
+            align-items: center; justify-content: center; z-index: 100;
+        }
+        .modal-content {
+            background: white; border-radius: 12px; padding: 24px;
+            max-width: 500px; width: 90%;
+        }
+        
+        .dark .modal-content { background: #1f2937; }
+        .dark { background: #111827; color: #f3f4f6; }
+        .dark .bg-white { background: #1f2937 !important; }
+        .dark .text-gray-900 { color: #f3f4f6 !important; }
+        .dark .text-gray-600 { color: #9ca3af !important; }
+        .dark .border-gray-200 { border-color: #374151 !important; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div id="app" class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">
+                    <span class="mdi mdi-server-network"></span>
+                    VPS 补货监控
+                </h1>
+                <p class="text-gray-600 mt-1">实时监控 VPS 库存状态</p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span id="wsStatus" class="flex items-center text-sm">
+                    <span class="w-2 h-2 rounded-full bg-gray-400 mr-2"></span>
+                    <span>连接中...</span>
+                </span>
+                <button onclick="toggleDarkMode()" class="p-2 rounded-lg hover:bg-gray-200">
+                    <span class="mdi mdi-theme-light-dark text-xl"></span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-white rounded-xl p-6 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm">总产品数</p>
+                        <p id="statTotal" class="text-2xl font-bold text-gray-900">-</p>
+                    </div>
+                    <span class="mdi mdi-package-variant text-3xl text-blue-500"></span>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl p-6 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm">有货</p>
+                        <p id="statInStock" class="text-2xl font-bold text-green-500">-</p>
+                    </div>
+                    <span class="mdi mdi-check-circle text-3xl text-green-500"></span>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl p-6 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm">缺货</p>
+                        <p id="statOutOfStock" class="text-2xl font-bold text-red-500">-</p>
+                    </div>
+                    <span class="mdi mdi-close-circle text-3xl text-red-500"></span>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl p-6 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm">检查次数</p>
+                        <p id="statChecks" class="text-2xl font-bold text-gray-900">-</p>
+                    </div>
+                    <span class="mdi mdi-sync text-3xl text-purple-500"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Bar -->
+        <div class="flex justify-between items-center mb-4">
+            <div class="flex space-x-2">
+                <button onclick="checkAll()" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 flex items-center">
+                    <span class="mdi mdi-refresh mr-2"></span>
+                    立即检查
+                </button>
+                <button onclick="showAddModal()" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 flex items-center">
+                    <span class="mdi mdi-plus mr-2"></span>
+                    添加产品
+                </button>
+                <button onclick="syncFromConfig()" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 flex items-center">
+                    <span class="mdi mdi-sync mr-2"></span>
+                    同步配置
+                </button>
+            </div>
+            <div class="flex items-center space-x-2">
+                <label class="flex items-center cursor-pointer">
+                    <input type="checkbox" id="enabledOnly" onchange="loadProducts()" class="mr-2">
+                    <span class="text-gray-600 text-sm">只显示启用</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Products Table -->
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+            <table class="w-full">
+                <thead class="bg-gray-50 border-b">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">产品</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">站点</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">价格</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">最后检查</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="productsTable" class="divide-y divide-gray-200">
+                    <tr>
+                        <td colspan="6" class="px-6 py-12 text-center text-gray-500">
+                            <span class="mdi mdi-loading mdi-spin text-2xl"></span>
+                            <p class="mt-2">加载中...</p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Recent History -->
+        <div class="mt-8">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">
+                <span class="mdi mdi-history"></span>
+                最近检查记录
+            </h2>
+            <div id="historyList" class="bg-white rounded-xl shadow-sm divide-y divide-gray-200 max-h-96 overflow-y-auto">
+                <div class="px-6 py-4 text-center text-gray-500">暂无记录</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div id="productModal" class="modal hidden">
+        <div class="modal-content">
+            <h3 class="text-xl font-bold mb-4">
+                <span id="modalTitle">添加产品</span>
+            </h3>
+            <form id="productForm" onsubmit="saveProduct(event)">
+                <input type="hidden" id="productId">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">产品名称</label>
+                        <input type="text" id="productName" required 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">产品链接</label>
+                        <input type="url" id="productUrl" required 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">站点标识</label>
+                        <select id="productSite" required
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="bandwagonhost">搬瓦工</option>
+                            <option value="dmit">DMIT</option>
+                            <option value="racknerd">RackNerd</option>
+                            <option value="cloudcone">CloudCone</option>
+                            <option value="hostdare">HostDare</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                        <input type="text" id="productDesc" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="productEnabled" checked class="mr-2">
+                        <label for="productEnabled" class="text-sm text-gray-700">启用监控</label>
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" onclick="closeModal()" 
+                        class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                        取消
+                    </button>
+                    <button type="submit" 
+                        class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                        保存
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        let ws = null;
+
+        // ==================== API Calls ====================
+        
+        async function api(path, options = {}) {
+            const res = await fetch(API_BASE + path, {
+                headers: { 'Content-Type': 'application/json' },
+                ...options
+            });
+            if (!res.ok) throw new Error(`API Error: ${res.status}`);
+            return res.json();
+        }
+
+        // ==================== Products ====================
+        
+        async function loadProducts() {
+            try {
+                const enabledOnly = document.getElementById('enabledOnly').checked;
+                const data = await api(`/products?enabled_only=${enabledOnly}`);
+                renderProducts(data.items);
+                updateStats(data);
+            } catch (e) {
+                showToast('加载产品失败: ' + e.message, 'error');
+            }
+        }
+
+        function renderProducts(products) {
+            const tbody = document.getElementById('productsTable');
+            
+            if (!products.length) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="px-6 py-12 text-center text-gray-500">
+                            <span class="mdi mdi-package-variant-closed text-4xl"></span>
+                            <p class="mt-2">暂无产品，点击"添加产品"开始监控</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = products.map(p => `
+                <tr class="${!p.enabled ? 'opacity-50' : ''}" data-id="${p.id}">
+                    <td class="px-6 py-4">
+                        <div>
+                            <div class="font-medium text-gray-900">${escapeHtml(p.name)}</div>
+                            <div class="text-sm text-gray-500">${escapeHtml(p.description || '')}</div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="px-2 py-1 bg-gray-100 rounded text-sm">${escapeHtml(p.site)}</span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="flex items-center status-${p.status}">
+                            <span class="mdi ${getStatusIcon(p.status)} mr-1"></span>
+                            ${getStatusText(p.status)}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-gray-900">
+                        ${p.price ? '$' + p.price.toFixed(2) : '-'}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        ${p.last_checked ? formatTime(p.last_checked) : '从未'}
+                    </td>
+                    <td class="px-6 py-4 text-right space-x-2">
+                        <button onclick="checkProduct('${p.id}')" class="text-blue-500 hover:text-blue-700" title="立即检查">
+                            <span class="mdi mdi-refresh"></span>
+                        </button>
+                        <button onclick="toggleProduct('${p.id}')" class="text-yellow-500 hover:text-yellow-700" title="${p.enabled ? '禁用' : '启用'}">
+                            <span class="mdi mdi-${p.enabled ? 'pause' : 'play'}"></span>
+                        </button>
+                        <button onclick="editProduct('${p.id}')" class="text-gray-500 hover:text-gray-700" title="编辑">
+                            <span class="mdi mdi-pencil"></span>
+                        </button>
+                        <button onclick="deleteProduct('${p.id}')" class="text-red-500 hover:text-red-700" title="删除">
+                            <span class="mdi mdi-delete"></span>
+                        </button>
+                        <a href="${escapeHtml(p.url)}" target="_blank" class="text-gray-500 hover:text-gray-700" title="打开链接">
+                            <span class="mdi mdi-open-in-new"></span>
+                        </a>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function updateStats(data) {
+            document.getElementById('statTotal').textContent = data.total;
+            
+            let inStock = 0, outOfStock = 0;
+            data.items.forEach(p => {
+                if (p.status === 'in_stock') inStock++;
+                else if (p.status === 'out_of_stock') outOfStock++;
+            });
+            
+            document.getElementById('statInStock').textContent = inStock;
+            document.getElementById('statOutOfStock').textContent = outOfStock;
+        }
+
+        async function loadStats() {
+            try {
+                const stats = await api('/status/stats');
+                document.getElementById('statChecks').textContent = stats.total_checks;
+            } catch (e) {}
+        }
+
+        async function checkProduct(id) {
+            try {
+                await api(`/products/${id}/check`, { method: 'POST' });
+                showToast('已触发检查', 'success');
+            } catch (e) {
+                showToast('触发检查失败', 'error');
+            }
+        }
+
+        async function checkAll() {
+            try {
+                await api('/system/check-all', { method: 'POST' });
+                showToast('已触发全部检查', 'success');
+            } catch (e) {
+                showToast('触发检查失败', 'error');
+            }
+        }
+
+        async function toggleProduct(id) {
+            try {
+                await api(`/products/${id}/toggle`, { method: 'POST' });
+                loadProducts();
+            } catch (e) {
+                showToast('操作失败', 'error');
+            }
+        }
+
+        async function deleteProduct(id) {
+            if (!confirm('确定要删除这个产品吗？')) return;
+            try {
+                await api(`/products/${id}`, { method: 'DELETE' });
+                showToast('删除成功', 'success');
+                loadProducts();
+            } catch (e) {
+                showToast('删除失败', 'error');
+            }
+        }
+
+        async function syncFromConfig() {
+            try {
+                await api('/products/sync', { method: 'POST' });
+                showToast('同步完成', 'success');
+                loadProducts();
+            } catch (e) {
+                showToast('同步失败', 'error');
+            }
+        }
+
+        // ==================== Modal ====================
+
+        function showAddModal() {
+            document.getElementById('modalTitle').textContent = '添加产品';
+            document.getElementById('productId').value = '';
+            document.getElementById('productForm').reset();
+            document.getElementById('productModal').classList.remove('hidden');
+        }
+
+        async function editProduct(id) {
+            try {
+                const product = await api(`/products/${id}`);
+                document.getElementById('modalTitle').textContent = '编辑产品';
+                document.getElementById('productId').value = id;
+                document.getElementById('productName').value = product.name;
+                document.getElementById('productUrl').value = product.url;
+                document.getElementById('productSite').value = product.site;
+                document.getElementById('productDesc').value = product.description || '';
+                document.getElementById('productEnabled').checked = product.enabled;
+                document.getElementById('productModal').classList.remove('hidden');
+            } catch (e) {
+                showToast('加载产品失败', 'error');
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('productModal').classList.add('hidden');
+        }
+
+        async function saveProduct(e) {
+            e.preventDefault();
+            
+            const id = document.getElementById('productId').value;
+            const data = {
+                name: document.getElementById('productName').value,
+                url: document.getElementById('productUrl').value,
+                site: document.getElementById('productSite').value,
+                description: document.getElementById('productDesc').value,
+                enabled: document.getElementById('productEnabled').checked
+            };
+
+            try {
+                if (id) {
+                    await api(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+                    showToast('更新成功', 'success');
+                } else {
+                    await api('/products', { method: 'POST', body: JSON.stringify(data) });
+                    showToast('添加成功', 'success');
+                }
+                closeModal();
+                loadProducts();
+            } catch (e) {
+                showToast('保存失败: ' + e.message, 'error');
+            }
+        }
+
+        // ==================== WebSocket ====================
+
+        function connectWebSocket() {
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${location.host}/ws`);
+            
+            ws.onopen = () => {
+                document.getElementById('wsStatus').innerHTML = `
+                    <span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span>
+                    <span class="text-green-600">已连接</span>
+                `;
+            };
+            
+            ws.onclose = () => {
+                document.getElementById('wsStatus').innerHTML = `
+                    <span class="w-2 h-2 rounded-full bg-red-500 mr-2"></span>
+                    <span class="text-red-600">已断开</span>
+                `;
+                // 自动重连
+                setTimeout(connectWebSocket, 3000);
+            };
+            
+            ws.onmessage = (e) => {
+                try {
+                    const msg = JSON.parse(e.data);
+                    handleWSMessage(msg);
+                } catch (err) {}
+            };
+        }
+
+        function handleWSMessage(msg) {
+            switch (msg.type) {
+                case 'stock_change':
+                    showToast(`🎉 ${msg.data.product_name} 有货了！`, 'success');
+                    loadProducts();
+                    break;
+                case 'check_result':
+                    addHistoryItem(msg.data);
+                    break;
+                case 'ping':
+                    ws.send(JSON.stringify({ type: 'pong' }));
+                    break;
+            }
+        }
+
+        function addHistoryItem(data) {
+            const list = document.getElementById('historyList');
+            const item = document.createElement('div');
+            item.className = 'px-6 py-3 flex justify-between items-center';
+            item.innerHTML = `
+                <div>
+                    <span class="font-medium">${escapeHtml(data.product_name)}</span>
+                    <span class="ml-2 status-${data.status}">${getStatusText(data.status)}</span>
+                </div>
+                <span class="text-sm text-gray-500">${formatTime(data.checked_at)}</span>
+            `;
+            list.insertBefore(item, list.firstChild);
+            
+            // 限制数量
+            while (list.children.length > 20) {
+                list.removeChild(list.lastChild);
+            }
+        }
+
+        // ==================== Helpers ====================
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>"']/g, m => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[m]));
+        }
+
+        function getStatusIcon(status) {
+            return {
+                'in_stock': 'mdi-check-circle',
+                'out_of_stock': 'mdi-close-circle',
+                'unknown': 'mdi-help-circle',
+                'error': 'mdi-alert-circle',
+                'checking': 'mdi-loading mdi-spin'
+            }[status] || 'mdi-help-circle';
+        }
+
+        function getStatusText(status) {
+            return {
+                'in_stock': '有货',
+                'out_of_stock': '缺货',
+                'unknown': '未知',
+                'error': '错误',
+                'checking': '检查中'
+            }[status] || '未知';
+        }
+
+        function formatTime(time) {
+            if (!time) return '';
+            const d = new Date(time);
+            return d.toLocaleString('zh-CN');
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark');
+            localStorage.setItem('darkMode', document.body.classList.contains('dark'));
+        }
+
+        // ==================== Init ====================
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // 恢复暗色模式
+            if (localStorage.getItem('darkMode') === 'true') {
+                document.body.classList.add('dark');
+            }
+            
+            loadProducts();
+            loadStats();
+            connectWebSocket();
+            
+            // 定时刷新
+            setInterval(() => {
+                loadProducts();
+                loadStats();
+            }, 30000);
+        });
+
+        // 点击模态框外部关闭
+        document.getElementById('productModal').addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal')) closeModal();
+        });
+    </script>
+</body>
+</html>
